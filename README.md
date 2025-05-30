@@ -29,7 +29,7 @@ cd LineForge
 Install the required dependencies:
 
 ```bash
-pip install tqdm
+pip install -r requirements.txt
 ```
 
 ## Usage
