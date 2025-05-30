@@ -37,6 +37,10 @@ def is_binary_file(file_path):
     If it contains NULL bytes or other binary characters, it's likely binary.
     """
     try:
+        # Check file size first - empty files are not binary
+        if os.path.getsize(file_path) == 0:
+            return False
+            
         # Read the first chunk of the file
         with open(file_path, 'rb') as f:
             chunk = f.read(8192)
@@ -59,6 +63,18 @@ def is_binary_file(file_path):
 def process_file(file_path, newline_format, remove_whitespace, preserve_tabs):
     """Process a file to normalize line endings and optionally handle whitespace."""
     try:
+        # Check if the file exists
+        if not os.path.exists(file_path):
+            with log_lock:
+                logger.error(f"File not found: {file_path}")
+            return False
+
+        # Check if the file is empty
+        if os.path.getsize(file_path) == 0:
+            with log_lock:
+                logger.debug(f"Skipping empty file: {file_path}")
+            return False
+            
         # Check if the file is a binary file
         if is_binary_file(file_path):
             with log_lock:
@@ -104,6 +120,7 @@ def process_file(file_path, newline_format, remove_whitespace, preserve_tabs):
             
         # Only write back if content has changed
         if original_content != modified_content:
+            encoding_used = 'utf-8'
             # Try to write with the same encoding we read with
             try:
                 with open(file_path, 'w', newline='', encoding='utf-8') as f:
@@ -112,15 +129,24 @@ def process_file(file_path, newline_format, remove_whitespace, preserve_tabs):
                     logger.debug(f"Updated file: {file_path}")
                 return True
             except UnicodeEncodeError:
+                encoding_used = 'latin-1'
                 with open(file_path, 'w', newline='', encoding='latin-1') as f:
                     f.write(modified_content)
                 with log_lock:
                     logger.debug(f"Updated file: {file_path} (with latin-1 encoding)")
                 return True
+            except Exception as e:
+                with log_lock:
+                    logger.error(f"Error writing to {file_path}: {str(e)}")
+                return False
         else:
             with log_lock:
                 logger.debug(f"No changes needed for file: {file_path}")
             return False
+    except PermissionError as e:
+        with log_lock:
+            logger.error(f"Permission denied accessing {file_path}: {str(e)}")
+        return False
     except Exception as e:
         with log_lock:
             logger.error(f"Error processing {file_path}: {str(e)}")
@@ -135,8 +161,15 @@ def find_files(root_dir, file_patterns, ignore_dirs=None):
     all_files = []
     ignore_dirs_set = set(ignore_dirs)
     
+    # Handle empty or None file_patterns
+    if not file_patterns:
+        file_patterns = [".txt"]  # Default to text files if nothing specified
+    
     for pattern in file_patterns:
         pattern = pattern.strip()
+        if not pattern:  # Skip empty patterns
+            continue
+            
         # Check if pattern is just an extension
         if pattern.startswith('.') and len(pattern.split('.')) == 2:
             # It's just an extension, make it a glob pattern
@@ -189,126 +222,139 @@ def process_files_parallel(files, newline_format, remove_whitespace, preserve_ta
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Normalize line endings in text files")
-    parser.add_argument(
-        "root_dir", 
-        nargs="?", 
-        default=None, 
-        help="Root directory to process (default: current directory)"
-    )
-    parser.add_argument(
-        "file_patterns", 
-        nargs="?", 
-        default=None, 
-        help="File patterns to match (e.g., '.txt .py .md')"
-    )
-    parser.add_argument(
-        "--format", 
-        choices=["crlf", "lf"], 
-        default="crlf", 
-        help="Target line ending format (default: crlf)"
-    )
-    parser.add_argument(
-        "--remove-whitespace", 
-        action="store_true", 
-        help="Remove extra white space and blank lines"
-    )
-    parser.add_argument(
-        "--preserve-tabs", 
-        action="store_true", 
-        help="Preserve tab characters (default: convert to spaces)"
-    )
-    parser.add_argument(
-        "--non-interactive", 
-        action="store_true", 
-        help="Run in non-interactive mode with provided options"
-    )
-    parser.add_argument(
-        "--ignore-dirs",
-        nargs="+",
-        default=[],
-        help="Directories to ignore during processing (default: .git, .github, __pycache__, node_modules, venv, .venv)"
-    )
-    parser.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Enable verbose logging"
-    )
-    parser.add_argument(
-        "--workers",
-        type=int,
-        default=None,
-        help="Number of worker threads (default: auto-detect based on CPU count)"
-    )
-    
-    args = parser.parse_args()
-    
-    # Set logging level based on verbosity
-    if args.verbose:
-        logger.setLevel(logging.DEBUG)
-    
-    # Interactive mode if arguments are not provided
-    if not args.non_interactive and (args.root_dir is None or args.file_patterns is None):
-        if args.root_dir is None:
-            args.root_dir = input("Normalize what root directory? [default: current directory] ").strip()
-            if not args.root_dir:
-                args.root_dir = os.getcwd()
+    try:
+        parser = argparse.ArgumentParser(description="Normalize line endings in text files")
+        parser.add_argument(
+            "root_dir", 
+            nargs="?", 
+            default=None, 
+            help="Root directory to process (default: current directory)"
+        )
+        parser.add_argument(
+            "file_patterns", 
+            nargs="?", 
+            default=None, 
+            help="File patterns to match (e.g., '.txt .py .md')"
+        )
+        parser.add_argument(
+            "--format", 
+            choices=["crlf", "lf"], 
+            default="crlf", 
+            help="Target line ending format (default: crlf)"
+        )
+        parser.add_argument(
+            "--remove-whitespace", 
+            action="store_true", 
+            help="Remove extra white space and blank lines"
+        )
+        parser.add_argument(
+            "--preserve-tabs", 
+            action="store_true", 
+            help="Preserve tab characters (default: convert to spaces)"
+        )
+        parser.add_argument(
+            "--non-interactive", 
+            action="store_true", 
+            help="Run in non-interactive mode with provided options"
+        )
+        parser.add_argument(
+            "--ignore-dirs",
+            nargs="+",
+            default=[],
+            help="Directories to ignore during processing (default: .git, .github, __pycache__, node_modules, venv, .venv)"
+        )
+        parser.add_argument(
+            "--verbose",
+            action="store_true",
+            help="Enable verbose logging"
+        )
+        parser.add_argument(
+            "--workers",
+            type=int,
+            default=None,
+            help="Number of worker threads (default: auto-detect based on CPU count)"
+        )
         
-        if args.file_patterns is None:
-            args.file_patterns = input("Normalize files that end with what? (e.g., '.txt .py') ").strip()
-            if not args.file_patterns:
-                args.file_patterns = ".txt"
+        args = parser.parse_args()
+        
+        # Set logging level based on verbosity
+        if args.verbose:
+            logger.setLevel(logging.DEBUG)
+        
+        # Interactive mode if arguments are not provided
+        if not args.non_interactive and (args.root_dir is None or args.file_patterns is None):
+            if args.root_dir is None:
+                args.root_dir = input("Normalize what root directory? [default: current directory] ").strip()
+                if not args.root_dir:
+                    args.root_dir = os.getcwd()
+            
+            if args.file_patterns is None:
+                args.file_patterns = input("Normalize files that end with what? (e.g., '.txt .py') ").strip()
+                if not args.file_patterns:
+                    args.file_patterns = ".txt"
+                    
+            format_choice = input("Convert to which line ending format? [crlf/lf, default: crlf] ").strip().lower()
+            if format_choice in ['lf', 'crlf']:
+                args.format = format_choice
                 
-        format_choice = input("Convert to which line ending format? [crlf/lf, default: crlf] ").strip().lower()
-        if format_choice in ['lf', 'crlf']:
-            args.format = format_choice
+            remove_whitespace = input("Would you like to get rid of extra white space (y/n)? [default: n] ").strip().lower()
+            args.remove_whitespace = remove_whitespace.startswith('y')
             
-        remove_whitespace = input("Would you like to get rid of extra white space (y/n)? [default: n] ").strip().lower()
-        args.remove_whitespace = remove_whitespace.startswith('y')
+            if not args.remove_whitespace:
+                preserve_tabs = input("Would you like to preserve tabs? (y/n)? [default: n] ").strip().lower()
+                args.preserve_tabs = preserve_tabs.startswith('y')
+                
+            ignore_dirs_input = input("Directories to ignore (space-separated)? [default: .git .github __pycache__ node_modules venv .venv] ").strip()
+            if ignore_dirs_input:
+                args.ignore_dirs = ignore_dirs_input.split()
         
-        if not args.remove_whitespace:
-            preserve_tabs = input("Would you like to preserve tabs? (y/n)? [default: n] ").strip().lower()
-            args.preserve_tabs = preserve_tabs.startswith('y')
+        # Ensure root_dir exists and is valid
+        root_dir = args.root_dir if args.root_dir else os.getcwd()
+        if not os.path.isdir(root_dir):
+            logger.error(f"Error: '{root_dir}' is not a valid directory.")
+            return 1
             
-        ignore_dirs_input = input("Directories to ignore (space-separated)? [default: .git .github __pycache__ node_modules venv .venv] ").strip()
-        if ignore_dirs_input:
-            args.ignore_dirs = ignore_dirs_input.split()
-    
-    # Ensure root_dir exists and is valid
-    root_dir = args.root_dir if args.root_dir else os.getcwd()
-    if not os.path.isdir(root_dir):
-        logger.error(f"Error: '{root_dir}' is not a valid directory.")
-        sys.exit(1)
+        # Parse file patterns
+        file_patterns = args.file_patterns.split() if args.file_patterns else [".txt"]
         
-    # Parse file patterns
-    file_patterns = args.file_patterns.split() if args.file_patterns else [".txt"]
-    
-    # Default ignore directories
-    default_ignore_dirs = ['.git', '.github', '__pycache__', 'node_modules', 'venv', '.venv']
-    ignore_dirs = args.ignore_dirs if args.ignore_dirs else default_ignore_dirs
-    
-    # Find all matching files
-    logger.info(f"Searching for files in {root_dir} matching patterns: {' '.join(file_patterns)}")
-    logger.info(f"Ignoring directories: {', '.join(ignore_dirs)}")
-    files = find_files(root_dir, file_patterns, ignore_dirs)
-    
-    if not files:
-        logger.warning("No matching files found.")
-        sys.exit(0)
+        # Default ignore directories
+        default_ignore_dirs = ['.git', '.github', '__pycache__', 'node_modules', 'venv', '.venv']
+        ignore_dirs = args.ignore_dirs if args.ignore_dirs else default_ignore_dirs
         
-    logger.info(f"Found {len(files)} files to process.")
-    
-    # Process files with parallel execution
-    processed_count = process_files_parallel(
-        files, 
-        args.format, 
-        args.remove_whitespace, 
-        args.preserve_tabs,
-        max_workers=args.workers
-    )
+        # Validate workers count
+        if args.workers is not None and args.workers <= 0:
+            logger.warning(f"Invalid worker count ({args.workers}), using auto-detection instead")
+            args.workers = None
+        
+        # Find all matching files
+        logger.info(f"Searching for files in {root_dir} matching patterns: {' '.join(file_patterns)}")
+        logger.info(f"Ignoring directories: {', '.join(ignore_dirs)}")
+        files = find_files(root_dir, file_patterns, ignore_dirs)
+        
+        if not files:
+            logger.warning("No matching files found.")
+            return 0
             
-    logger.info(f"Done! Processed {processed_count} of {len(files)} files.")
+        logger.info(f"Found {len(files)} files to process.")
+        
+        # Process files with parallel execution
+        processed_count = process_files_parallel(
+            files, 
+            args.format, 
+            args.remove_whitespace, 
+            args.preserve_tabs,
+            max_workers=args.workers
+        )
+                
+        logger.info(f"Done! Processed {processed_count} of {len(files)} files.")
+        return 0
+    except KeyboardInterrupt:
+        logger.info("Operation cancelled by user.")
+        return 130
+    except Exception as e:
+        logger.error(f"An unexpected error occurred: {str(e)}")
+        return 1
 
 
 if __name__ == "__main__":
-    main() 
+    sys.exit(main()) 

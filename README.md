@@ -15,6 +15,7 @@ A cross-platform Python utility for normalizing line endings in text files. Easi
 - Ignore specific directories (.git, .github, node_modules, etc.)
 - Progress bar for tracking file processing
 - Robust handling of different file encodings (UTF-8, Latin-1)
+- Intelligent binary file detection (skips binary files automatically)
 - Detailed logging for monitoring and debugging
 - Interactive and non-interactive modes
 
