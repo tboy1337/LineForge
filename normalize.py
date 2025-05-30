@@ -369,7 +369,7 @@ def main():
             "--workers",
             type=int,
             default=None,
-            help="Number of worker threads (default: auto-detect based on CPU count)"
+            help="Number of worker threads for parallel processing (default: auto-detect based on CPU count)"
         )
         parser.add_argument(
             "--version",
