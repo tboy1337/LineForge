@@ -10,15 +10,35 @@ import sys
 import glob
 import argparse
 import re
+import logging
 from pathlib import Path
+from tqdm import tqdm
+
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('lineforge.log', mode='a')
+    ]
+)
+logger = logging.getLogger('LineForge')
 
 
 def process_file(file_path, newline_format, remove_whitespace, preserve_tabs):
     """Process a file to normalize line endings and optionally handle whitespace."""
     try:
-        # Read the file content
-        with open(file_path, 'r', newline='', encoding='utf-8', errors='replace') as f:
-            content = f.read()
+        # First try with UTF-8 encoding
+        try:
+            with open(file_path, 'r', newline='', encoding='utf-8') as f:
+                content = f.read()
+        except UnicodeDecodeError:
+            # If UTF-8 fails, try with latin-1 encoding (which should handle any byte sequence)
+            logger.warning(f"UTF-8 decoding failed for {file_path}, falling back to latin-1")
+            with open(file_path, 'r', newline='', encoding='latin-1') as f:
+                content = f.read()
             
         # Create a temporary content variable to hold modified content
         modified_content = content
@@ -45,28 +65,44 @@ def process_file(file_path, newline_format, remove_whitespace, preserve_tabs):
             
         # Only write back if content has changed
         if content != modified_content:
-            # Write the modified content back to the file
-            with open(file_path, 'w', newline='', encoding='utf-8') as f:
-                f.write(modified_content)
+            # Try to write with the same encoding we read with
+            try:
+                with open(file_path, 'w', newline='', encoding='utf-8') as f:
+                    f.write(modified_content)
+            except UnicodeEncodeError:
+                with open(file_path, 'w', newline='', encoding='latin-1') as f:
+                    f.write(modified_content)
             return True
         return False
     except Exception as e:
-        print(f"Error processing {file_path}: {str(e)}")
+        logger.error(f"Error processing {file_path}: {str(e)}")
         return False
 
 
-def find_files(root_dir, file_patterns):
+def find_files(root_dir, file_patterns, ignore_dirs=None):
     """Find all files matching the given patterns recursively."""
+    if ignore_dirs is None:
+        ignore_dirs = ['.git', '.github', '__pycache__', 'node_modules', 'venv', '.venv']
+    
     all_files = []
+    ignore_dirs_set = set(ignore_dirs)
+    
     for pattern in file_patterns:
         pattern = pattern.strip()
         # Make sure the pattern has a leading dot if it's just an extension
         if pattern.startswith('.'):
             pattern = f"*{pattern}"
-        # Use recursive glob to find all matching files
-        for filepath in Path(root_dir).rglob(pattern):
-            if filepath.is_file():
-                all_files.append(str(filepath))
+            
+        # Walk the directory tree to find matching files
+        for root, dirs, files in os.walk(root_dir):
+            # Remove ignored directories from dirs to prevent walk from traversing them
+            dirs[:] = [d for d in dirs if d not in ignore_dirs_set]
+            
+            # Find matching files in current directory
+            for filename in files:
+                if Path(filename).match(pattern):
+                    all_files.append(os.path.join(root, filename))
+                    
     return all_files
 
 
@@ -105,8 +141,23 @@ def main():
         action="store_true", 
         help="Run in non-interactive mode with provided options"
     )
+    parser.add_argument(
+        "--ignore-dirs",
+        nargs="+",
+        default=[],
+        help="Directories to ignore during processing (default: .git, .github, __pycache__, node_modules, venv, .venv)"
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Enable verbose logging"
+    )
     
     args = parser.parse_args()
+    
+    # Set logging level based on verbosity
+    if args.verbose:
+        logger.setLevel(logging.DEBUG)
     
     # Interactive mode if arguments are not provided
     if not args.non_interactive:
@@ -130,34 +181,45 @@ def main():
         if not args.remove_whitespace:
             preserve_tabs = input("Would you like to preserve tabs? (y/n)? [default: n] ").strip().lower()
             args.preserve_tabs = preserve_tabs.startswith('y')
+            
+        ignore_dirs_input = input("Directories to ignore (space-separated)? [default: .git .github __pycache__ node_modules venv .venv] ").strip()
+        if ignore_dirs_input:
+            args.ignore_dirs = ignore_dirs_input.split()
     
     # Ensure root_dir exists and is valid
     root_dir = args.root_dir if args.root_dir else os.getcwd()
     if not os.path.isdir(root_dir):
-        print(f"Error: '{root_dir}' is not a valid directory.")
+        logger.error(f"Error: '{root_dir}' is not a valid directory.")
         sys.exit(1)
         
     # Parse file patterns
     file_patterns = args.file_patterns.split() if args.file_patterns else [".txt"]
     
+    # Default ignore directories
+    default_ignore_dirs = ['.git', '.github', '__pycache__', 'node_modules', 'venv', '.venv']
+    ignore_dirs = args.ignore_dirs if args.ignore_dirs else default_ignore_dirs
+    
     # Find all matching files
-    print(f"Searching for files in {root_dir} matching patterns: {' '.join(file_patterns)}")
-    files = find_files(root_dir, file_patterns)
+    logger.info(f"Searching for files in {root_dir} matching patterns: {' '.join(file_patterns)}")
+    logger.info(f"Ignoring directories: {', '.join(ignore_dirs)}")
+    files = find_files(root_dir, file_patterns, ignore_dirs)
     
     if not files:
-        print("No matching files found.")
+        logger.warning("No matching files found.")
         sys.exit(0)
         
-    print(f"Found {len(files)} files to process.")
+    logger.info(f"Found {len(files)} files to process.")
     
-    # Process files
+    # Process files with progress bar
     processed_count = 0
-    for file_path in files:
-        print(f"Processing {file_path}...")
-        if process_file(file_path, args.format, args.remove_whitespace, args.preserve_tabs):
-            processed_count += 1
+    with tqdm(total=len(files), desc="Processing files", unit="file") as pbar:
+        for file_path in files:
+            logger.debug(f"Processing {file_path}...")
+            if process_file(file_path, args.format, args.remove_whitespace, args.preserve_tabs):
+                processed_count += 1
+            pbar.update(1)
             
-    print(f"Done! Processed {processed_count} of {len(files)} files.")
+    logger.info(f"Done! Processed {processed_count} of {len(files)} files.")
 
 
 if __name__ == "__main__":

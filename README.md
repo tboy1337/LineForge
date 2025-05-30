@@ -11,6 +11,10 @@ A cross-platform Python utility for normalizing line endings in text files. Easi
 - Convert tabs to spaces (optional)
 - Process files recursively across directories
 - Filter files by extension patterns
+- Ignore specific directories (.git, .github, node_modules, etc.)
+- Progress bar for tracking file processing
+- Robust handling of different file encodings (UTF-8, Latin-1)
+- Detailed logging for monitoring and debugging
 - Interactive and non-interactive modes
 
 ## Installation
@@ -22,7 +26,11 @@ git clone https://github.com/tboy1337/LineForge.git
 cd LineForge
 ```
 
-No additional dependencies required - LineForge uses only the Python standard library.
+Install the required dependencies:
+
+```bash
+pip install tqdm
+```
 
 ## Usage
 
@@ -40,6 +48,7 @@ You'll be prompted for:
 - Target line ending format (CRLF or LF)
 - Whether to remove extra whitespace
 - Whether to preserve tabs
+- Directories to ignore
 
 ### Command Line Arguments
 
@@ -53,6 +62,8 @@ python normalize.py [root_dir] [file_patterns] [options]
 - `--remove-whitespace`: Remove extra white space and blank lines
 - `--preserve-tabs`: Preserve tab characters (default: convert to spaces)
 - `--non-interactive`: Run in non-interactive mode with provided options
+- `--ignore-dirs`: Directories to ignore during processing (default: .git, .github, __pycache__, node_modules, venv, .venv)
+- `--verbose`: Enable verbose logging
 
 ### Examples
 
@@ -64,6 +75,16 @@ python normalize.py . ".txt" --format crlf
 Convert all Python and Markdown files in a specific directory to LF, remove whitespace, and convert tabs to spaces:
 ```bash
 python normalize.py /path/to/project ".py .md" --format lf --remove-whitespace
+```
+
+Process all text files but ignore certain directories:
+```bash
+python normalize.py . ".txt .md .py" --format lf --ignore-dirs .git build dist
+```
+
+Enable verbose logging for detailed information:
+```bash
+python normalize.py . ".txt" --verbose
 ```
 
 ## Testing
