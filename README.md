@@ -10,6 +10,7 @@ A cross-platform Python utility for normalizing line endings in text files. Easi
 - Collapse multiple blank lines
 - Convert tabs to spaces (optional)
 - Process files recursively across directories
+- Multi-threaded processing for improved performance
 - Filter files by extension patterns
 - Ignore specific directories (.git, .github, node_modules, etc.)
 - Progress bar for tracking file processing
@@ -64,6 +65,7 @@ python normalize.py [root_dir] [file_patterns] [options]
 - `--non-interactive`: Run in non-interactive mode with provided options
 - `--ignore-dirs`: Directories to ignore during processing (default: .git, .github, __pycache__, node_modules, venv, .venv)
 - `--verbose`: Enable verbose logging
+- `--workers`: Number of worker threads for parallel processing (default: auto-detect based on CPU count)
 
 ### Examples
 
@@ -82,9 +84,9 @@ Process all text files but ignore certain directories:
 python normalize.py . ".txt .md .py" --format lf --ignore-dirs .git build dist
 ```
 
-Enable verbose logging for detailed information:
+Enable verbose logging and specify number of worker threads:
 ```bash
-python normalize.py . ".txt" --verbose
+python normalize.py . ".txt" --verbose --workers 4
 ```
 
 ## Testing
@@ -92,8 +94,12 @@ python normalize.py . ".txt" --verbose
 LineForge includes comprehensive tests to ensure correct functionality:
 
 ```bash
-python -m unittest tests/test_normalize.py
+python -m unittest discover -s tests
 ```
+
+## Performance
+
+The multi-threaded implementation significantly improves processing speed on large codebases. By default, LineForge will use an optimal number of threads based on your CPU, but you can manually specify the number of worker threads using the `--workers` option.
 
 ## License
 

@@ -221,6 +221,70 @@ class TestNormalizer(unittest.TestCase):
         self.assertIn(b'Line with special chars:', content)
         self.assertIn(b'Extra line with CRLF', content)
 
+    def test_parallel_processing(self):
+        """Test parallel processing of multiple files."""
+        # Create multiple test files
+        test_files = []
+        for i in range(5):
+            file_path = os.path.join(self.test_dir, f"parallel_test_{i}.txt")
+            with open(file_path, 'wb') as f:
+                f.write(b"Line 1\r\nLine 2\r\nLine 3\r\n")
+            test_files.append(file_path)
+        
+        # Process files in parallel
+        processed_count = normalize.process_files_parallel(
+            test_files,
+            'lf',
+            False,
+            True,
+            max_workers=2  # Use 2 workers for testing
+        )
+        
+        # Check that all files were processed
+        self.assertEqual(processed_count, 5)
+        
+        # Verify that all files have LF line endings
+        for file_path in test_files:
+            with open(file_path, 'rb') as f:
+                content = f.read()
+                self.assertEqual(content.count(b'\r'), 0)
+                self.assertEqual(content.count(b'\n'), 3)
+
+    def test_file_pattern_handling(self):
+        """Test handling of different file pattern formats."""
+        # Create a separate test directory for this test to avoid counting files from other tests
+        pattern_test_dir = os.path.join(self.test_dir, "pattern_test")
+        os.makedirs(pattern_test_dir)
+        
+        # Create test files with different extensions
+        test_files = {
+            "test.txt": "Text file",
+            "test.py": "Python file",
+            "test.md": "Markdown file",
+            "test.config": "Config file",
+            "noextension": "No extension file"
+        }
+        
+        for filename, content in test_files.items():
+            with open(os.path.join(pattern_test_dir, filename), 'w') as f:
+                f.write(content)
+        
+        # Test with just extension
+        txt_files = normalize.find_files(pattern_test_dir, [".txt"])
+        self.assertEqual(len(txt_files), 1)
+        
+        # Test with full pattern
+        md_files = normalize.find_files(pattern_test_dir, ["*.md"])
+        self.assertEqual(len(md_files), 1)
+        
+        # Test with multiple patterns
+        multi_files = normalize.find_files(pattern_test_dir, [".txt", "*.py", "*.md"])
+        self.assertEqual(len(multi_files), 3)
+        
+        # Test with pattern that doesn't match any files
+        no_match = normalize.find_files(pattern_test_dir, [".jpg"])
+        self.assertEqual(len(no_match), 0)
+
 
 if __name__ == "__main__":
     unittest.main() 

@@ -13,9 +13,11 @@ import re
 import logging
 from pathlib import Path
 from tqdm import tqdm
+import concurrent.futures
+import threading
 
 
-# Set up logging
+# Set up logging with thread-safe handler
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -25,6 +27,8 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger('LineForge')
+# Add a thread lock for logging
+log_lock = threading.Lock()
 
 
 def process_file(file_path, newline_format, remove_whitespace, preserve_tabs):
@@ -36,7 +40,8 @@ def process_file(file_path, newline_format, remove_whitespace, preserve_tabs):
                 content = f.read()
         except UnicodeDecodeError:
             # If UTF-8 fails, try with latin-1 encoding (which should handle any byte sequence)
-            logger.warning(f"UTF-8 decoding failed for {file_path}, falling back to latin-1")
+            with log_lock:
+                logger.warning(f"UTF-8 decoding failed for {file_path}, falling back to latin-1")
             with open(file_path, 'r', newline='', encoding='latin-1') as f:
                 content = f.read()
             
@@ -75,7 +80,8 @@ def process_file(file_path, newline_format, remove_whitespace, preserve_tabs):
             return True
         return False
     except Exception as e:
-        logger.error(f"Error processing {file_path}: {str(e)}")
+        with log_lock:
+            logger.error(f"Error processing {file_path}: {str(e)}")
         return False
 
 
@@ -89,21 +95,53 @@ def find_files(root_dir, file_patterns, ignore_dirs=None):
     
     for pattern in file_patterns:
         pattern = pattern.strip()
-        # Make sure the pattern has a leading dot if it's just an extension
-        if pattern.startswith('.'):
-            pattern = f"*{pattern}"
+        # Check if pattern is just an extension
+        if pattern.startswith('.') and len(pattern.split('.')) == 2:
+            # It's just an extension, make it a glob pattern
+            glob_pattern = f"*{pattern}"
+        else:
+            # It's already a proper pattern
+            glob_pattern = pattern
             
         # Walk the directory tree to find matching files
         for root, dirs, files in os.walk(root_dir):
-            # Remove ignored directories from dirs to prevent walk from traversing them
+            # Skip ignored directories
             dirs[:] = [d for d in dirs if d not in ignore_dirs_set]
             
             # Find matching files in current directory
             for filename in files:
-                if Path(filename).match(pattern):
-                    all_files.append(os.path.join(root, filename))
+                file_path = os.path.join(root, filename)
+                if Path(filename).match(glob_pattern):
+                    all_files.append(file_path)
                     
     return all_files
+
+
+def process_files_parallel(files, newline_format, remove_whitespace, preserve_tabs, max_workers=None):
+    """Process files in parallel using ThreadPoolExecutor."""
+    processed_count = 0
+    with tqdm(total=len(files), desc="Processing files", unit="file") as pbar:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all file processing tasks
+            future_to_file = {
+                executor.submit(process_file, file_path, newline_format, remove_whitespace, preserve_tabs): file_path
+                for file_path in files
+            }
+            
+            # Process results as they complete
+            for future in concurrent.futures.as_completed(future_to_file):
+                file_path = future_to_file[future]
+                with log_lock:
+                    logger.debug(f"Processing {file_path}...")
+                try:
+                    if future.result():
+                        processed_count += 1
+                except Exception as e:
+                    with log_lock:
+                        logger.error(f"Error processing {file_path}: {str(e)}")
+                pbar.update(1)
+                
+    return processed_count
 
 
 def main():
@@ -151,6 +189,12 @@ def main():
         "--verbose",
         action="store_true",
         help="Enable verbose logging"
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=None,
+        help="Number of worker threads (default: auto-detect based on CPU count)"
     )
     
     args = parser.parse_args()
@@ -210,14 +254,14 @@ def main():
         
     logger.info(f"Found {len(files)} files to process.")
     
-    # Process files with progress bar
-    processed_count = 0
-    with tqdm(total=len(files), desc="Processing files", unit="file") as pbar:
-        for file_path in files:
-            logger.debug(f"Processing {file_path}...")
-            if process_file(file_path, args.format, args.remove_whitespace, args.preserve_tabs):
-                processed_count += 1
-            pbar.update(1)
+    # Process files with parallel execution
+    processed_count = process_files_parallel(
+        files, 
+        args.format, 
+        args.remove_whitespace, 
+        args.preserve_tabs,
+        max_workers=args.workers
+    )
             
     logger.info(f"Done! Processed {processed_count} of {len(files)} files.")
 
