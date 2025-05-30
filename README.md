@@ -18,6 +18,7 @@ A cross-platform Python utility for normalizing line endings in text files. Easi
 - Intelligent binary file detection (skips binary files automatically)
 - Detailed logging for monitoring and debugging
 - Interactive and non-interactive modes
+- File backup and recovery mechanism for safer processing
 
 ## Installation
 
@@ -51,6 +52,7 @@ You'll be prompted for:
 - Whether to remove extra whitespace
 - Whether to preserve tabs
 - Directories to ignore
+- Number of worker threads
 
 ### Command Line Arguments
 
@@ -67,6 +69,7 @@ python normalize.py [root_dir] [file_patterns] [options]
 - `--ignore-dirs`: Directories to ignore during processing (default: .git, .github, __pycache__, node_modules, venv, .venv)
 - `--verbose`: Enable verbose logging
 - `--workers`: Number of worker threads for parallel processing (default: auto-detect based on CPU count)
+- `--version`: Show program version and exit
 
 ### Examples
 
@@ -101,6 +104,8 @@ python -m unittest discover -s tests
 ## Performance
 
 The multi-threaded implementation significantly improves processing speed on large codebases. By default, LineForge will use an optimal number of threads based on your CPU, but you can manually specify the number of worker threads using the `--workers` option.
+
+For large file sets, LineForge processes files in batches to manage memory usage efficiently.
 
 ## License
 

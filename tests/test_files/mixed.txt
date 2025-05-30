@@ -2,7 +2,10 @@ This is a line with CRLF line ending
 This is a line with LF line ending
 This is another line with CRLF line ending
 This is a line with CR line ending
-This is a line with trailing whitespace
+This is a line with trailing whitespace   
     This line has tab indentation
         This line has double tab indentation
+
+
+
 This line has multiple blank lines before it
