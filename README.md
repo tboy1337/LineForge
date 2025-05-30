@@ -1,87 +1,83 @@
 # LineForge
 
-A cross-platform Python script to normalize line endings in text files between CRLF (Windows) and LF (Unix/Linux/macOS).
+A cross-platform Python utility for normalizing line endings in text files. Easily convert between CRLF and LF line endings while also handling whitespace cleanup.
 
 ## Features
 
-- Convert text files to CRLF or LF line endings
-- Process files recursively in a directory structure
-- Optional whitespace cleaning (removal of extra blank lines and trailing spaces)
-- Tab preservation options
-- Both interactive and command-line modes
-- Cross-platform compatibility (Windows, macOS, Linux)
-- UTF-8 encoding support with fallback error handling
+- Convert line endings to CRLF (Windows) or LF (Unix/Linux/macOS)
+- Normalize mixed line endings within a single file
+- Remove trailing whitespace from lines
+- Collapse multiple blank lines
+- Convert tabs to spaces (optional)
+- Process files recursively across directories
+- Filter files by extension patterns
+- Interactive and non-interactive modes
 
-## Requirements
+## Installation
 
-- Python 3.6 or higher
+Clone the repository:
+
+```bash
+git clone https://github.com/tboy1337/LineForge.git
+cd LineForge
+```
+
+No additional dependencies required - LineForge uses only the Python standard library.
 
 ## Usage
 
-### Basic Usage
+### Interactive Mode
+
+Run the script without arguments for interactive mode:
 
 ```bash
-# Run in interactive mode
 python normalize.py
-
-# Process all .txt files in the current directory, converting to CRLF
-python normalize.py . .txt
-
-# Process all .py files in a specific directory, converting to LF
-python normalize.py /path/to/directory .py --format lf
-
-# Process multiple file types
-python normalize.py /path/to/directory ".txt .py .md" --format crlf
 ```
+
+You'll be prompted for:
+- Root directory to process (default: current directory)
+- File patterns to match (e.g., '.txt .py .md')
+- Target line ending format (CRLF or LF)
+- Whether to remove extra whitespace
+- Whether to preserve tabs
 
 ### Command Line Arguments
 
+```bash
+python normalize.py [root_dir] [file_patterns] [options]
 ```
-usage: normalize.py [-h] [--format {crlf,lf}] [--remove-whitespace] 
-                   [--preserve-tabs] [--non-interactive]
-                   [root_dir] [file_patterns]
 
-Normalize line endings in text files
+#### Options:
 
-positional arguments:
-  root_dir              Root directory to process (default: current directory)
-  file_patterns         File patterns to match (e.g., '.txt .py .md')
-
-options:
-  -h, --help            show this help message and exit
-  --format {crlf,lf}    Target line ending format (default: crlf)
-  --remove-whitespace   Remove extra white space and blank lines
-  --preserve-tabs       Preserve tab characters (default: convert to spaces)
-  --non-interactive     Run in non-interactive mode with provided options
-```
+- `--format {crlf,lf}`: Target line ending format (default: crlf)
+- `--remove-whitespace`: Remove extra white space and blank lines
+- `--preserve-tabs`: Preserve tab characters (default: convert to spaces)
+- `--non-interactive`: Run in non-interactive mode with provided options
 
 ### Examples
 
-**Convert all Python files to Unix/Linux line endings (LF):**
+Convert all .txt files in the current directory to CRLF line endings:
 ```bash
-python normalize.py . .py --format lf
+python normalize.py . ".txt" --format crlf
 ```
 
-**Convert all text files to Windows line endings (CRLF) and remove extra whitespace:**
+Convert all Python and Markdown files in a specific directory to LF, remove whitespace, and convert tabs to spaces:
 ```bash
-python normalize.py . .txt --format crlf --remove-whitespace
+python normalize.py /path/to/project ".py .md" --format lf --remove-whitespace
 ```
 
-**Process multiple file types in non-interactive mode:**
+## Testing
+
+LineForge includes comprehensive tests to ensure correct functionality:
+
 ```bash
-python normalize.py /path/to/project ".py .js .html" --format lf --non-interactive
+python -m unittest tests/test_normalize.py
 ```
-
-## Notes
-
-- The script operates on files in-place, so make sure to back up important files before processing.
-- By default, tabs are converted to spaces (4 spaces per tab) unless the `--preserve-tabs` option is used.
-- The script attempts to handle various text encodings, but works best with UTF-8 encoded files.
-
-## Repository
-
-This project is hosted at [https://github.com/tboy1337/LineForge](https://github.com/tboy1337/LineForge)
 
 ## License
 
-This tool is provided as open-source software under the MIT License. See the [LICENSE](LICENSE.txt) file for details. 
+LineForge is released under the MIT License. See [LICENSE.txt](LICENSE.txt) for details.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request. 
