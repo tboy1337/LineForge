@@ -1,3 +1,3 @@
 """
-Test files for LineForge utility.
+Test file directory for LineForge tests.
 """ 

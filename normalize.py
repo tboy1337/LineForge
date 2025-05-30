@@ -31,9 +31,40 @@ logger = logging.getLogger('LineForge')
 log_lock = threading.Lock()
 
 
+def is_binary_file(file_path):
+    """
+    Check if a file is binary by reading the first 8192 bytes.
+    If it contains NULL bytes or other binary characters, it's likely binary.
+    """
+    try:
+        # Read the first chunk of the file
+        with open(file_path, 'rb') as f:
+            chunk = f.read(8192)
+            
+        # Check for NULL bytes (common in binary files)
+        if b'\x00' in chunk:
+            return True
+            
+        # Check for non-text bytes
+        # This is a simplified heuristic, might need refinement
+        text_characters = bytearray({7, 8, 9, 10, 12, 13, 27} | set(range(0x20, 0x100)) - {0x7f})
+        non_text = chunk.translate(None, text_characters)
+        return float(len(non_text)) / len(chunk) > 0.3
+    except Exception as e:
+        with log_lock:
+            logger.error(f"Error checking if file is binary {file_path}: {str(e)}")
+        return True  # Assume binary on error for safety
+
+
 def process_file(file_path, newline_format, remove_whitespace, preserve_tabs):
     """Process a file to normalize line endings and optionally handle whitespace."""
     try:
+        # Check if the file is a binary file
+        if is_binary_file(file_path):
+            with log_lock:
+                logger.debug(f"Skipping binary file: {file_path}")
+            return False
+            
         # First try with UTF-8 encoding
         try:
             with open(file_path, 'r', newline='', encoding='utf-8') as f:
@@ -44,6 +75,9 @@ def process_file(file_path, newline_format, remove_whitespace, preserve_tabs):
                 logger.warning(f"UTF-8 decoding failed for {file_path}, falling back to latin-1")
             with open(file_path, 'r', newline='', encoding='latin-1') as f:
                 content = f.read()
+        
+        # Store original content for comparison
+        original_content = content
             
         # Create a temporary content variable to hold modified content
         modified_content = content
@@ -51,7 +85,7 @@ def process_file(file_path, newline_format, remove_whitespace, preserve_tabs):
         # Handle whitespace if requested
         if remove_whitespace:
             # Remove extra blank lines (multiple consecutive newlines)
-            modified_content = re.sub(r'\n\s*\n', '\n', modified_content)
+            modified_content = re.sub(r'\n\s*\n', '\n\n', modified_content)  # Limit to just one blank line
             # Remove trailing whitespace from each line
             modified_content = re.sub(r'[ \t]+$', '', modified_content, flags=re.MULTILINE)
             
@@ -69,16 +103,24 @@ def process_file(file_path, newline_format, remove_whitespace, preserve_tabs):
             modified_content = modified_content.replace('\r\n', '\n').replace('\r', '\n')
             
         # Only write back if content has changed
-        if content != modified_content:
+        if original_content != modified_content:
             # Try to write with the same encoding we read with
             try:
                 with open(file_path, 'w', newline='', encoding='utf-8') as f:
                     f.write(modified_content)
+                with log_lock:
+                    logger.debug(f"Updated file: {file_path}")
+                return True
             except UnicodeEncodeError:
                 with open(file_path, 'w', newline='', encoding='latin-1') as f:
                     f.write(modified_content)
-            return True
-        return False
+                with log_lock:
+                    logger.debug(f"Updated file: {file_path} (with latin-1 encoding)")
+                return True
+        else:
+            with log_lock:
+                logger.debug(f"No changes needed for file: {file_path}")
+            return False
     except Exception as e:
         with log_lock:
             logger.error(f"Error processing {file_path}: {str(e)}")
@@ -134,12 +176,14 @@ def process_files_parallel(files, newline_format, remove_whitespace, preserve_ta
                 with log_lock:
                     logger.debug(f"Processing {file_path}...")
                 try:
-                    if future.result():
+                    result = future.result()
+                    if result:
                         processed_count += 1
                 except Exception as e:
                     with log_lock:
                         logger.error(f"Error processing {file_path}: {str(e)}")
-                pbar.update(1)
+                finally:
+                    pbar.update(1)
                 
     return processed_count
 
@@ -204,7 +248,7 @@ def main():
         logger.setLevel(logging.DEBUG)
     
     # Interactive mode if arguments are not provided
-    if not args.non_interactive:
+    if not args.non_interactive and (args.root_dir is None or args.file_patterns is None):
         if args.root_dir is None:
             args.root_dir = input("Normalize what root directory? [default: current directory] ").strip()
             if not args.root_dir:
