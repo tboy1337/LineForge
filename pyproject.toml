@@ -43,7 +43,8 @@ dev = [
     "pylint",
     "mypy",
     "black",
-    "isort"
+    "isort",
+    "types-tqdm"
 ]
 
 [project.scripts]
