@@ -3,7 +3,6 @@
 Create a test file with mixed line endings for testing the line ending normalizer.
 """
 
-import os
 from pathlib import Path
 
 # Create the test_files directory if it doesn't exist
@@ -14,7 +13,7 @@ test_files_dir.mkdir(exist_ok=True)
 test_file_path = test_files_dir / "mixed.txt"
 
 # Define content with explicit line endings
-content = (
+CONTENT = (
     b"This is a line with CRLF line ending\r\n"
     b"This is a line with LF line ending\n"
     b"This is another line with CRLF line ending\r\n"
@@ -29,7 +28,7 @@ content = (
 )
 
 # Write content to file in binary mode
-with open(test_file_path, 'wb') as f:
-    f.write(content)
+with open(test_file_path, "wb") as f:
+    f.write(CONTENT)
 
-print(f"Created test file: {test_file_path}") 
+print(f"Created test file: {test_file_path}")

@@ -11,4 +11,4 @@ This module provides functionality to:
 """
 
 __version__ = "1.0.0"
-__author__ = "tboy1337" 
+__author__ = "tboy1337"

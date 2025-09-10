@@ -128,7 +128,7 @@ def is_binary_file(
         return True  # Assume binary on error for safety
 
 
-def process_file(
+def process_file(  # pylint: disable=too-many-return-statements,too-many-branches,too-many-statements
     file_path: str, newline_format: str, remove_whitespace: bool, preserve_tabs: bool
 ) -> bool:
     """Process a file to normalize line endings and optionally handle whitespace."""
@@ -171,7 +171,7 @@ def process_file(
                 content = f.read()
             encoding_used = "utf-8"
         except UnicodeDecodeError:
-            # If UTF-8 fails, try with latin-1 encoding (which should handle any byte sequence)
+            # If UTF-8 fails, try with latin-1 encoding (handles any byte sequence)
             with log_lock:
                 logger.warning(
                     "UTF-8 decoding failed for %s, falling back to latin-1", file_path
@@ -286,7 +286,9 @@ def process_file(
 
 
 def find_files(
-    root_dir: str, file_patterns: List[str], ignore_dirs: Optional[List[str]] = None
+    root_dir: str,
+    file_patterns: Optional[List[str]],
+    ignore_dirs: Optional[List[str]] = None,
 ) -> List[str]:
     """Find all files matching the given patterns recursively."""
     if ignore_dirs is None:
@@ -472,7 +474,8 @@ def main() -> (
             "--ignore-dirs",
             nargs="+",
             default=[],
-            help="Directories to ignore during processing (default: .git, .github, __pycache__, node_modules, venv, .venv)",
+            help="Directories to ignore during processing "
+            "(default: .git, .github, __pycache__, node_modules, venv, .venv)",
         )
         parser.add_argument(
             "--verbose", action="store_true", help="Enable verbose logging"
@@ -481,7 +484,8 @@ def main() -> (
             "--workers",
             type=int,
             default=None,
-            help="Number of worker threads for parallel processing (default: auto-detect based on CPU count)",
+            help="Number of worker threads for parallel processing "
+            "(default: auto-detect based on CPU count)",
         )
         parser.add_argument(
             "--version",
@@ -524,7 +528,8 @@ def main() -> (
 
             remove_whitespace = (
                 input(
-                    "Would you like to get rid of extra white space (y/n)? [default: n] "
+                    "Would you like to get rid of extra white space (y/n)? "
+                    "[default: n] "
                 )
                 .strip()
                 .lower()
@@ -540,7 +545,8 @@ def main() -> (
                 args.preserve_tabs = preserve_tabs.startswith("y")
 
             ignore_dirs_input = input(
-                "Directories to ignore (space-separated)? [default: .git .github __pycache__ node_modules venv .venv] "
+                "Directories to ignore (space-separated)? "
+                "[default: .git .github __pycache__ node_modules venv .venv] "
             ).strip()
             if ignore_dirs_input:
                 args.ignore_dirs = ignore_dirs_input.split()
@@ -630,7 +636,11 @@ def main() -> (
             hours = int(execution_time // 3600)
             minutes = int((execution_time % 3600) // 60)
             seconds = execution_time % 60
-            time_str = f"{hours} hour{'s' if hours != 1 else ''} {minutes} minute{'s' if minutes != 1 else ''} {seconds:.2f} seconds"
+            time_str = (
+                f"{hours} hour{'s' if hours != 1 else ''} "
+                f"{minutes} minute{'s' if minutes != 1 else ''} "
+                f"{seconds:.2f} seconds"
+            )
 
         logger.info(
             "Done! Processed %d of %d files in %s.",
