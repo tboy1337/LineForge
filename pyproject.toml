@@ -7,7 +7,7 @@ name = "lineforge"
 version = "1.0.0"
 description = "A cross-platform Python utility for normalizing line endings in text files"
 authors = [
-    {name = "tboy1337", email = "tboy1337@example.com"}
+    {name = "tboy1337", url = "https://tboy1337.github.io/"}
 ]
 readme = "README.md"
 license = {file = "LICENSE.txt"}
